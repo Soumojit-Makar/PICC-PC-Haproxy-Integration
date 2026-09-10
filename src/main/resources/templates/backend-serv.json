@@ -1,0 +1,5 @@
+{
+  "address": "[=host]",
+  "name": "[=comp_name]",
+  "port": [=port?c]
+}
