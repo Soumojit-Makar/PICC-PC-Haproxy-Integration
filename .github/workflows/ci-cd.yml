@@ -11,6 +11,11 @@ jobs:
   validate-and-test:
     name: Validate, Test & Security Scan
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: read
+    env:
+      GITHUB_TOKEN: ${{ secrets.PACKAGE_READ_TOKEN || secrets.GH_TOKEN || secrets.GITHUB_TOKEN }}
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
@@ -21,21 +26,39 @@ jobs:
           java-version: '21'
           distribution: 'temurin'
           cache: maven
+          server-id: github
+          server-username: GITHUB_ACTOR
+          server-password: GITHUB_TOKEN
 
       - name: Validate Maven POM
         run: mvn validate
+        env:
+          GITHUB_ACTOR: ${{ github.actor }}
+          GITHUB_TOKEN: ${{ secrets.PACKAGE_READ_TOKEN || secrets.GH_TOKEN || secrets.GITHUB_TOKEN }}
 
       - name: Compile and Test
         run: mvn clean test
+        env:
+          GITHUB_ACTOR: ${{ github.actor }}
+          GITHUB_TOKEN: ${{ secrets.PACKAGE_READ_TOKEN || secrets.GH_TOKEN || secrets.GITHUB_TOKEN }}
 
       - name: Run SAST Security Scans (SpotBugs)
         run: mvn spotbugs:check
+        env:
+          GITHUB_ACTOR: ${{ github.actor }}
+          GITHUB_TOKEN: ${{ secrets.PACKAGE_READ_TOKEN || secrets.GH_TOKEN || secrets.GITHUB_TOKEN }}
 
       - name: Run Vulnerability Scans (OWASP Dependency-Check)
         run: mvn dependency-check:check
+        env:
+          GITHUB_ACTOR: ${{ github.actor }}
+          GITHUB_TOKEN: ${{ secrets.PACKAGE_READ_TOKEN || secrets.GH_TOKEN || secrets.GITHUB_TOKEN }}
 
       - name: Generate CycloneDX SBOM
         run: mvn cyclonedx:makeAggregateBom
+        env:
+          GITHUB_ACTOR: ${{ github.actor }}
+          GITHUB_TOKEN: ${{ secrets.PACKAGE_READ_TOKEN || secrets.GH_TOKEN || secrets.GITHUB_TOKEN }}
 
   publish:
     name: Publish Artifacts to GitHub Packages
@@ -55,6 +78,9 @@ jobs:
           java-version: '21'
           distribution: 'temurin'
           cache: maven
+          server-id: github
+          server-username: GITHUB_ACTOR
+          server-password: GITHUB_TOKEN
 
       - name: Deploy to GitHub Packages
         run: mvn clean deploy -Pgithub-packages -DskipTests
