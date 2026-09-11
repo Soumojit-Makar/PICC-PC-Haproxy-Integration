@@ -1,0 +1,6 @@
+{
+  "cond": "if",
+  "cond_test": "is_[=comp_name]",
+  "index": [=index?c],
+  "name": "[=comp_name]"
+}

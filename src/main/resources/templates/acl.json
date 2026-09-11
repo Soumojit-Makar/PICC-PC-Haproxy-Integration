@@ -1,0 +1,5 @@
+{
+  "acl_name": "is_[=comp_name]",
+  "criterion": "hdr(host)",
+  "value": "[=comp_name]-[=acc_name].example.com"
+}

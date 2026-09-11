@@ -1,0 +1,30 @@
+services:
+  haproxy-integration:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: picc-pc-haproxy-integration:latest
+    container_name: haproxy-integration
+    ports:
+      - "${SERVER_PORT:-8081}:8081"
+    environment:
+      - SERVER_PORT=${SERVER_PORT:-8081}
+      - SPRING_PROFILES_ACTIVE=${SPRING_PROFILES_ACTIVE:-main}
+      - HAPROXY_FEIGN_NAME=${HAPROXY_FEIGN_NAME:-haproxy-data-plane}
+      - HAPROXY_DATAPLANE_URL=${HAPROXY_DATAPLANE_URL:-http://localhost:5555}
+      - FEIGN_URL_API=${FEIGN_URL_API:-/v3/services/haproxy}
+      - HAPROXY_DATAPLANE_USER=${HAPROXY_DATAPLANE_USER:-dataplaneapi}
+      - HAPROXY_DATAPLANE_PASSWORD=${HAPROXY_DATAPLANE_PASSWORD:-}
+      - K8S_MASTER_IP=${K8S_MASTER_IP:-127.0.0.1}
+      - K8S_SERVER_PORT=${K8S_SERVER_PORT:-6443}
+      - K8S_CLUSTER_TOKEN=${K8S_CLUSTER_TOKEN:-}
+      - HAPROXY_K8S_VALIDATION_ENABLED=${HAPROXY_K8S_VALIDATION_ENABLED:-true}
+      - HAPROXY_K8S_STRICT_MODE=${HAPROXY_K8S_STRICT_MODE:-false}
+      - CONFIG_SERVER_URL=${CONFIG_SERVER_URL:-http://localhost:8888}
+    restart: unless-stopped
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:8081/actuator/health" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
