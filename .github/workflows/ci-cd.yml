@@ -1,4 +1,4 @@
-name: Build & Publish CI/CD
+name: Build & Deploy Docker Image
 
 on:
   push:
@@ -6,6 +6,10 @@ on:
     tags: [ 'v*.*.*' ]
   pull_request:
     branches: [ main, master ]
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
 
 jobs:
   validate-and-test:
@@ -51,24 +55,31 @@ jobs:
 
       - name: Compile and Test
         run: mvn clean test
+        env:
+          GITHUB_ACTOR: ${{ github.actor }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Run SAST Security Scans (SpotBugs)
+      - name: Run SAST Security Scans
         run: mvn spotbugs:check
-
-      # - name: Run Vulnerability Scans (OWASP Dependency-Check)
-      #   run: mvn dependency-check:check
+        env:
+          GITHUB_ACTOR: ${{ github.actor }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Generate CycloneDX SBOM
         run: mvn cyclonedx:makeAggregateBom
+        env:
+          GITHUB_ACTOR: ${{ github.actor }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-  publish:
-    name: Publish Artifacts to GitHub Packages
+  docker:
+    name: Build & Push Docker Image
     needs: validate-and-test
     if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
     runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
+
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
@@ -101,8 +112,48 @@ jobs:
           GITHUB_ACTOR: ${{ github.actor }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Deploy to GitHub Packages
-        run: mvn clean deploy -Pgithub-packages -DskipTests -Ddependency-check.skip=true
+      - name: Build JAR (skip tests — already run in validate job)
+        run: mvn clean package -DskipTests -Ddependency-check.skip=true
         env:
           GITHUB_ACTOR: ${{ github.actor }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract Docker Metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' }}
+            type=semver,pattern={{version}}
+            type=sha,format=short
+          labels: |
+            org.opencontainers.image.title=PICC-PP-NNP-DMS-Management
+            org.opencontainers.image.description=Enterprise DMS Management Microservice for Nubo Native Platform
+            org.opencontainers.image.vendor=Nubo-Native-Platform
+            org.opencontainers.image.licenses=Apache-2.0
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and Push Docker Image
+        id: docker_build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          dockerfile: Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          platforms: linux/amd64,linux/arm64
+      - name: Print Image Digest
+        run: echo "Docker image pushed with digest ${{ steps.docker_build.outputs.digest }}"
